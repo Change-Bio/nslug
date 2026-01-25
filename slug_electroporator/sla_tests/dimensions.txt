@@ -1,0 +1,2 @@
+﻿"channel_width"=.6
+"channel_wall_width"=.6
