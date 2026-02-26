@@ -1,77 +1,123 @@
-# Generates STL files from SolidWorks part files by varying dimensions specified in a dictionary.
-# Requires to be run from the directory containing the SolidWorks part file and a PowerShell script `export_solidworks_to_stl.ps1` for exporting to STL.
-# Solidworks part must have global dimensions linked to a text file named `dimensions.txt.
+# Generates STL files from SolidWorks part/assembly files by varying dimensions specified in a dictionary.
+# Requires running from a repo where SolidWorks model exists.
+# SolidWorks model must have global dimensions linked to a text file named `dimensions.txt`.
+# Requires a PowerShell script `export_solidworks_to_stl.ps1` for exporting to STL.
 # Requires SolidWorks present on the system
 
-# Povilas Sauciuvienas 2025-01-25
-
+import os
 import subprocess
 from itertools import product
+from typing import Dict, Iterable, List, Optional
 
 
+def ensure_dir(path: str) -> str:
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
-
-def update_dims_txt(params) -> None:
-    with open("dimensions.txt", "w") as f:
+def update_dims_txt(params: Dict[str, float], model_path: str) -> str:
+    """
+    Writes dimensions.txt next to the SolidWorks model file (recommended),
+    because many SW setups reference a file relative to the model directory.
+    """
+    model_dir = os.path.dirname(os.path.abspath(model_path))
+    txt_path = os.path.join(model_dir, "dimensions.txt")
+    with open(txt_path, "w", encoding="utf-8") as f:
         for key, value in params.items():
             f.write(f"{key}={value}\n")
+    return txt_path
+
+
+def generate_param_grid(d: Dict[str, List[float]]) -> Iterable[Dict[str, float]]:
+    """Generates all combinations of parameters from the given dictionary."""
+    keys = list(d.keys())
+    for combo in product(*d.values()):
+        yield dict(zip(keys, combo))
+
+
+def name_from_params(params: Dict[str, float]) -> str:
+    """
+    Stable, filesystem-safe name. Converts 4.15 -> 4p15.
+    """
+    def fmt(x: float) -> str:
+        s = str(x)
+        if s.startswith("0."):
+            s = s[1:]
+     
+        return s
+
+    ir = fmt(params["inner_radius"])
+    oscr = fmt(params["outer_screw"])
+    iscr = fmt(params["inner_screw"])
+    return f"d{ir}o{oscr}i{iscr}"
 
 
 def generate_stl(
-    params,
-    solidworks_part_path: str,
-    out_folder="generated_STLs",
-    pws_script_path="export_solidworks_to_stl.ps1",
-    filename=None,
-):
-    """Generates an STL file from a SolidWorks part file with specified parameters."""
+    params: Dict[str, float],
+    solidworks_model_path: str,
+    out_folder: str = "generated_STLs",
+    pws_script_path: str = r"src\export_solidworks_to_stl.ps1",
+    filename: Optional[str] = None,
+) -> str:
+    """
+    Generates an STL file from a SolidWorks part/assembly file with specified parameters.
+    Returns the output STL path.
+    """
+    model_path = os.path.abspath(solidworks_model_path)
+    script_path = os.path.abspath(pws_script_path)
+    out_dir = ensure_dir(os.path.abspath(out_folder))
+
     if filename is None:
-        filename = pws_script_path.split(".")[0].split("/")[-1]
+        base = os.path.splitext(os.path.basename(model_path))[0]
+        filename = base
 
-    
-    
-    update_dims_txt(params)
+    # Write dimensions next to the model file
+    update_dims_txt(params, model_path)
 
-    output_path = f"{out_folder}/{filename}.stl"
+    output_path = os.path.join(out_dir, f"{filename}.stl")
 
-    subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            pws_script_path,
-            solidworks_part_path,
-            output_path,
-        ],
-        check=True,
-    )
+    cmd = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        script_path,
+        model_path,
+        output_path,
+    ]
 
+    p = subprocess.run(cmd, text=True, capture_output=True)
+    print("returncode:", p.returncode)
+    if p.stdout.strip():
+        print("stdout:\n", p.stdout)
+    if p.stderr.strip():
+        print("stderr:\n", p.stderr)
 
-def generate_param_grid(d: dict[str, list[float]]) -> dict[str, float]:
-    """Generates all combinations of parameters from the given dictionary."""
-    keys = d.keys()
-    for combo in product(*d.values()):
-        yield dict(list(zip(keys, combo)))
+    p.check_returncode()
 
+    if not os.path.exists(output_path):
+        raise RuntimeError(f"Export reported success but STL not found: {output_path}")
 
-
-
-def name_from_parms(params) -> str:
-    name_params = {k: str(v).lstrip("0") for k, v in params.items()}
-    return f"c{name_params['channel_width']}w{name_params['wall_width']}"
+    return output_path
 
 
 if __name__ == "__main__":
-    dimensions = {
-        "channel_width": [0.2, 0.4, 0.8, 1.6],
-        "wall_width": [0.2, 0.4, 0.8, 1.6],
+    dimensions: Dict[str, List[float]] = {
+        "inner_radius": [4.15, 4],
+        "outer_screw":  [7.8, 7.0, 6.0],
+        "inner_screw":  [6.6, 6.0, 5.0],
     }
 
+    # Point these at the actual SolidWorks file and desired output directory
+    solidworks_model_path = r"slug_electroporator\2026_02_12\lock_test.SLDASM"  # or .SLDPRT
+    out_folder = r"slug_electroporator\2026_02_12\stls"
+
     for params in generate_param_grid(dimensions):
-        generate_stl(
-            params, out_folder="cuvette_STLs", solidworks_part_path="cuvette.SLDPRT",
-            filename=name_from_parms(params)
+        stl_path = generate_stl(
+            params=params,
+            solidworks_model_path=solidworks_model_path,
+            out_folder=out_folder,
+            filename=name_from_params(params),
         )
+        print("Saved:", stl_path)

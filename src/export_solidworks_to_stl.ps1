@@ -130,6 +130,12 @@ namespace $ns {
 
             // Open the ORIGINAL (so references resolve correctly)
             var spec = (IDocumentSpecification)app.GetOpenDocSpec(originalPath);
+            string ext = System.IO.Path.GetExtension(originalPath).ToLowerInvariant();
+            if (ext == ".sldprt") spec.DocumentType = (int)swDocumentTypes_e.swDocPART;
+            else if (ext == ".sldasm") spec.DocumentType = (int)swDocumentTypes_e.swDocASSEMBLY;
+            else if (ext == ".slddrw") spec.DocumentType = (int)swDocumentTypes_e.swDocDRAWING;
+
+
             spec.ReadOnly = false;
             spec.Silent   = true;
 

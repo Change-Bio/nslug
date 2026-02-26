@@ -1,0 +1,2 @@
+channel_width=0.2
+wall_width=0.2
