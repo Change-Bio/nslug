@@ -2,3 +2,19 @@
 /slugger/sla_tests/*
 *.STL
 *.pyc
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

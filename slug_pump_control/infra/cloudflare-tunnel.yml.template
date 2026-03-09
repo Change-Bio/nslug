@@ -1,0 +1,21 @@
+tunnel: <YOUR_TUNNEL_ID>
+credentials-file: ~/.cloudflared/<YOUR_TUNNEL_ID>.json
+
+ingress:
+  # Web App (React frontend + Flask backend)
+  - hostname: <YOUR_DOMAIN>
+    path: /
+    service: http://localhost:5000
+
+  # MediaMTX WebRTC WHEP endpoint
+  - hostname: <YOUR_DOMAIN>
+    path: /camera/whep
+    service: http://localhost:8889/camera/whep
+
+  # MediaMTX API
+  - hostname: <YOUR_DOMAIN>
+    path: /v3/
+    service: http://localhost:9997
+
+  # Catch-all 404
+  - service: http_status:404
