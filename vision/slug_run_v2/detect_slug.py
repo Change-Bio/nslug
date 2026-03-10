@@ -2,10 +2,11 @@
 Detect and outline the slug using background subtraction + Kalman filtering.
 
 Strategy:
-  - Median background from the same video (slug averages out since it moves).
-  - Per-frame diff from median, masked to tube ROI, reveals where the slug is.
-  - Kalman filter smooths the centroid tracking (slug moves, doesn't teleport).
-  - Freehand contour drawn around the detected slug region.
+  - Median background from slug-free frames (first/last 3s of video).
+  - Per-frame diff from median reveals where the slug is.
+  - Horizontal morphological close bridges gaps through narrow channel sections.
+  - Convex hull merges fragmented contours into a single slug detection.
+  - Kalman filter smooths centroid; both raw and filtered are shown for comparison.
 
 Outputs: overlay_detected.mp4
 """
@@ -16,7 +17,8 @@ import numpy as np
 
 VIDEO = "slug_run_30s.mp4"
 OUT = "."
-DIFF_THRESH = 15.0
+DIFF_THRESH = 10.0
+
 
 
 def make_kalman():
@@ -34,7 +36,7 @@ def make_kalman():
         [0, 1, 0, 0],
     ], dtype=np.float32)
     kf.processNoiseCov = np.eye(4, dtype=np.float32) * 1.0
-    kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 10.0
+    kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 1.0
     kf.errorCovPost = np.eye(4, dtype=np.float32) * 100.0
     return kf
 
@@ -65,7 +67,9 @@ def main():
     bg_stack = np.array(bg_subset)
     median_bg = np.median(bg_stack, axis=0)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    # Wide horizontal kernel to bridge gaps along the channel
+    kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 3))
 
     # Kalman filter for slug centroid
     kf = make_kalman()
@@ -80,6 +84,8 @@ def main():
         # Diff from background
         diff = np.abs(gray - median_bg)
         detection_mask = (diff > DIFF_THRESH).astype(np.uint8) * 255
+        # Close with horizontal kernel first to bridge gaps along channel
+        detection_mask = cv2.morphologyEx(detection_mask, cv2.MORPH_CLOSE, kernel_h)
         detection_mask = cv2.morphologyEx(detection_mask, cv2.MORPH_CLOSE, kernel)
         detection_mask = cv2.morphologyEx(detection_mask, cv2.MORPH_OPEN, kernel)
 
@@ -90,14 +96,19 @@ def main():
         best_contour = None
 
         if contours:
-            largest = max(contours, key=cv2.contourArea)
-            area = cv2.contourArea(largest)
-            if area > 200:
-                best_contour = largest
-                M = cv2.moments(largest)
-                if M["m00"] > 0:
-                    measured_cx = M["m10"] / M["m00"]
-                    measured_cy = M["m01"] / M["m00"]
+            # Merge all significant contours so a slug stretching through
+            # a narrow channel section isn't split into separate detections.
+            significant = [c for c in contours if cv2.contourArea(c) > 50]
+            if significant:
+                merged_points = np.vstack(significant)
+                hull = cv2.convexHull(merged_points)
+                area = cv2.contourArea(hull)
+                if area > 200:
+                    best_contour = hull
+                    M = cv2.moments(hull)
+                    if M["m00"] > 0:
+                        measured_cx = M["m10"] / M["m00"]
+                        measured_cy = M["m01"] / M["m00"]
 
         # Kalman update
         if measured_cx is not None:
@@ -119,16 +130,13 @@ def main():
 
         # Draw
         if best_contour is not None:
-            # Smooth contour outline
             epsilon = 0.005 * cv2.arcLength(best_contour, True)
             smoothed = cv2.approxPolyDP(best_contour, epsilon, True)
             cv2.drawContours(frame_out, [smoothed], -1, (0, 255, 0), 3)
 
         if kalman_initialized:
-            # Kalman-filtered centroid
             state = kf.statePost
             kx, ky = int(state[0, 0]), int(state[1, 0])
-            # Crosshair at filtered position
             cv2.drawMarker(frame_out, (kx, ky), (0, 200, 255),
                            cv2.MARKER_CROSS, 30, 2)
             cv2.putText(frame_out, "SLUG", (kx - 30, ky - 25),
