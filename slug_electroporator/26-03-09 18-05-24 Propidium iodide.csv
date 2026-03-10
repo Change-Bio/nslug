@@ -1,0 +1,23 @@
+User: USER,Path: C:\Program Files (x86)\BMG\CLARIOstar\User\Data,Test run no.: 5385,,,,,,,,,,
+Test name: Propidium iodide,Date: 09/03/2026,Time: 18:05:24,,,,,,,,,,
+,,,,,,,,,,,,
+Fluorescence (FI), multichromatic,,,,,,,,,,,
+,,,,,,,,,,,,
+Raw Data (535-16/617-20 1),,,,,,,,,,,,
+,,,,,,,,,,,,
+,1,2,3,4,5,6,7,8,9,10,11,12
+A,,,,,,,,,,,,
+B,4622,491,12490,620,29936,14651,13943,14274,14611,14794,14645,11664
+C,4620,471,13571,592,26370,11998,14863,15664,13405,13784,15649,11509
+D,,484,12742,607,28849,,,,,,,
+E,,16119,,,,,,,,,,
+F,,,,,,,,,,,,
+G,,,,,,,,,,,,
+H,,,,,,,,,,,,
+,,,,,,,,,,,,
+,1B and 1C - Just PI,,,,,,,,,,,
+,"2B, C, D - No PI alive cells",,,,,,,,,,,
+,"3B,C,D - PI alive cells",,,,,,,,,,,
+,"4B,C,D - No PI dead cells",,,,,,,,,,,
+,"5B,C,D - PI dead cells",,,,,,,,,,,
+,6-12 are increasing voltages from 1-2kV in 0.2 kV steps then 2.5k V,,,,,,,,,,,
